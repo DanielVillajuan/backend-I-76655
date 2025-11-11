@@ -21,16 +21,13 @@ app.use('/api/pets', PetsRoute)
 app.use('/', ViewRoutes)
 
 const serverHttp = app.listen(8080, () => {
-    console.log("Server ON")
+    console.log("Servidor en puerto 8080")
 })
-
 const serverSocket = new Server(serverHttp)
 
 const BBDD = [];
 
 serverSocket.on('connection', (socket) => {
-    console.log('Nuevo cliente conectado con id ->', socket.id )
-
     socket.emit('lista_de_mensaje_actualizada',BBDD);
 
     socket.on('mensaje', (payload) => { // payload -> {user, mensaje}
