@@ -3,39 +3,68 @@ import UserRoute from './routes/user.route.js'
 import PetsRoute from './routes/pets.route.js'
 import ViewRoutes from './routes/view.route.js'
 import path from 'node:path'
+import { fileURLToPath } from 'url'
 import handlebars from 'express-handlebars'
 import { Server } from 'socket.io'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 const app = express()
 
-app.engine('handlebars', handlebars.engine()) // defino a express que va usar el motor de plantilla con la extension handlebars
-app.set('views', path.join(process.cwd(),'src','views')) // definimos que las vistas estaran en esta ruta src/views asi handlebars sabra donde buscarlas
+// Configuración de Handlebars
+app.engine('handlebars', handlebars.engine())
+app.set('views', path.join(__dirname, 'views'))
 app.set('view engine', 'handlebars')
 
-// si al use no le especifico la ruta como primer parametro, lo aplicara en '/'
-app.use(express.static(path.join(process.cwd(), 'src','public'))) // 'c:/userpc/documents/capertacoder/clase-5/src/public
+// Archivos estáticos
+app.use(express.static(path.join(__dirname, 'public')))
 
 // si le especifico a use el primer parametro, lo aplicara siempre a la misma
 app.use('/api/user', UserRoute)
 app.use('/api/pets', PetsRoute)
 app.use('/', ViewRoutes)
 
+// renderizar desde view.routes -> renderiza el chat
+app.use('/chat', ViewRoutes)
+
 const serverHttp = app.listen(8080, () => {
     console.log("Server ON")
 })
 
+// cesarito
+
 const serverSocket = new Server(serverHttp)
-
 const BBDD = [];
+const usuarios = {}
 
+// cada socket es un nueva pestaña que ingresa al endpoint
 serverSocket.on('connection', (socket) => {
-    console.log('Nuevo cliente conectado con id ->', socket.id )
+   // recibimos el nombre del usuario al conectarse
+   socket.on('registrar_usuario', (user) => {
+      usuarios[socket.id] = { nombre: user, conectado: true }
+      console.log(`${user} se conectó con id ${socket.id}`)
 
-    socket.emit('lista_de_mensaje_actualizada',BBDD);
+      // emitimos la lista de mensajes actualizada al socket que ingresa
+      socket.emit('lista_de_mensaje_actualizada',BBDD)
 
-    socket.on('mensaje', (payload) => { // payload -> {user, mensaje}
-        BBDD.push(payload)
-        serverSocket.emit('lista_de_mensaje_actualizada', BBDD)
-    })
+      // actualiza en todas las ventanas
+      socket.emit('estado_del_usuario', usuarios)
+   })
 
+   socket.on('mensaje', (payload) => { // payload -> {user, mensaje}
+      BBDD.push(payload)
+      serverSocket.emit('lista_de_mensaje_actualizada', BBDD)
+
+      // lista de usuarios
+      serverSocket.emit('estado_del_usuario', usuarios)
+   })
+
+   // detecta cuando el socket se desconecta, reason lo maneja io por si solo (no le doy valor)
+   socket.on('disconnect', (reason) => {
+      console.log(`${socket.id} se desconecto ${reason}`)
+      
+      usuarios[socket.id].conectado = false
+      // emitimos que id que se desconecto
+      serverSocket.emit('usuario_desconectado', socket.id)
+   })
 })
